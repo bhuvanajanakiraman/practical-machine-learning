@@ -1,0 +1,127 @@
+---
+title: Practical Machine Learning
+output: html_document
+---
+# Background and Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks.
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will use data recorded from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+More information is available from the website http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of this project is to predict the manner in which the participants did the exercise. This is the classe variable of the training set, which classifies the correct and incorrect outcomes into A, B, C, D, and E categories. This report describes how the model for the project was built, its cross validation, expected out of sample error calculation, and the choices made. It was used successfully to accurately predict all 20 different test cases on the Coursera website.
+
+This document is the write-up submission for the course Practical Machine Learning by Jeff Leek, PhD, Professor at Johns Hopkins University, Bloomberg School of Public Health. This 4-week course was offered on Coursera in June 2015, and is part of Johns Hopkins Data Science Specialization.
+
+## Data description 
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source:
+http://groupware.les.inf.puc-rio.br/har
+
+We first download the data from the links referenced above to our computer and upload the files into R (using RStudio), interpreting the miscellaneous NA, #DIV/0! and empty fields as NA:
+
+```{r,echo=TRUE}
+pml.training <- read.csv("~/Downloads/pml-training.csv",na.strings = c("NA","#DIV/0!"," "))
+pml.testing <- read.csv("~/Downloads/pml-testing.csv",na.strings =c("NA","#DIV/0!"," "))
+
+```
+We take a quick look at the data and particularly at classe which is the variable we need to predict:
+```{r,echo=TRUE}
+dim(pml.training)
+dim(pml.testing)
+str(pml.training,list.len=15)
+```
+
+removing columns with all NA values from the dataset
+```{r,echo=TRUE}
+trainingset<-pml.training[,colSums(is.na(pml.training)) == 0]
+testingset<-pml.testing[,colSums(is.na(pml.training)) == 0]
+
+```
+
+let’s first do some basic data clean-up by removing columns 1 to 6, which are there just for information and reference purposes:
+```{r,echo=TRUE}
+trainingset<-trainingset[,-c(1:7)]
+testingset<-testingset[,-c(1:7)]
+dim(trainingset)
+dim(testingset)
+
+```
+Before we can move forward with data analysis, we split the training set into two for cross validation purposes. We randomly subsample 60% of the set for training purposes (actual model building), while the 40% remainder will be used only for testing, evaluation and accuracy measurement.
+```{r,echo=TRUE}
+library(caret)
+library(ggplot2)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+intrain<-createDataPartition(y=trainingset$classe,p=.75,list=FALSE)
+train<-trainingset[intrain,]
+test<-trainingset[-intrain,]
+dim(train)
+dim(test)
+```
+
+At this stage, train1 is the training data set (it contains 14718 observations, or about 60% of the entire training data set), and train2 is the testing data set (it contains 4904 observations, or about 40% of the entire training data set). The dataset train2 will never be looked at, and will be used only for accuracy measurements.
+
+### Barchart for outcome varible
+The variable “classe” contains 5 levels: A, B, C, D and E. A plot of the outcome variable will allow us to see the frequency of each levels in the subTraining data set and compare one another.
+```{r,echo=TRUE}
+
+plot(train$classe,xlab="class",ylab="frequency",col="blue",main="classe varible within train data set")
+```
+From the graph above, we can see that each level frequency is within the same order of magnitude of each other. Level A is the most frequent with more than 4000 occurrences while level D is the least frequent with about 2500 occurrences.
+##Using ML algorithms for prediction:decision tree
+```{r,echo=TRUE}
+
+rfmodel<-rpart(classe~.,data=train,method="class")
+
+##prediction
+prediction<-predict(rfmodel,test,type="class")
+
+##decision treee plot
+rpart.plot(rfmodel,main="classification tree",extra = 102,under = TRUE,faclen = 0)
+```
+
+```{r,echo=TRUE}
+##confusion matrix
+confusionMatrix(prediction,test$classe)
+```
+
+##Second Prediction Model:using Random Forest
+```{r,echo=TRUE}
+rfmodel2<-randomForest(classe~.,train,method="class")
+rfmodel2
+prediction2<-predict(rfmodel2,test,type="class")
+confusionMatrix(prediction2,test$classe)
+```
+
+##Decision
+As expected, Random Forest algorithm performed better than Decision Trees.
+Accuracy for Random Forest model was 0.995 (95% CI: (0.993, 0.997)) compared to 0.739 (95% CI: (0.727, 0.752)) for Decision Tree model. The random Forest model is choosen. The accuracy of the model is 0.995. The expected out-of-sample error is estimated at 0.005, or 0.5%. The expected out-of-sample error is calculated as 1 - accuracy for predictions made against the cross-validation set. Our Test data set comprises 20 cases. With an accuracy above 99% on our cross-validation data, we can expect that very few, or none, of the test samples will be missclassified.
+
+#Submission
+```{r,echo=TRUE}
+predictfinal<-predict(rfmodel2,testingset,type="class")
+predictfinal
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+```
+
+
+
+
+
+
